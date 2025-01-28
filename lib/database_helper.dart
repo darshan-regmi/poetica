@@ -230,4 +230,6 @@ class DatabaseHelper {
     final db = await database;
     return db.query('users');
   }
+
+  getNotifications() {}
 }

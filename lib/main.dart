@@ -266,15 +266,15 @@ class _ExplorePageState extends State<ExplorePage> {
     return _poems.isEmpty
         ? Center(child: Text('No poems yet.'))
         : ListView.builder(
-            itemCount: _poems.length,
-            itemBuilder: (context, index) {
-              final poem = _poems[index];
-              return PoemCard(
-                title: poem['title'],
-                content: poem['content'],
-              );
-            },
-          );
+      itemCount: _poems.length,
+      itemBuilder: (context, index) {
+        final poem = _poems[index];
+        return PoemCard(
+          title: poem['title'],
+          content: poem['content'],
+        );
+      },
+    );
   }
 }
 
@@ -288,6 +288,8 @@ class PoemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: EdgeInsets.all(10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
@@ -295,12 +297,7 @@ class PoemCard extends StatelessWidget {
           children: [
             // Poem Header
             ListTile(
-              leading: CircleAvatar(
-                backgroundImage:
-                    NetworkImage('https://via.placeholder.com/150'),
-              ),
-              title: Text('Poet Name',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              title: Text('Poet Name', style: TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text('Mood: Reflective'),
               trailing: Icon(Icons.more_vert),
             ),
@@ -314,6 +311,42 @@ class PoemCard extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+            ),
+            // Poem Content
+            Text(
+              content,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.black87,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+            SizedBox(height: 10),
+            // Interaction Buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.favorite_border),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.comment),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.share),
+                      onPressed: () {},
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: Icon(Icons.bookmark_border),
+                  onPressed: () {},
+                ),
+              ],
             ),
           ],
         ),
@@ -400,20 +433,20 @@ class NotificationsPage extends StatelessWidget {
       body: _notifications.isEmpty
           ? Center(child: Text('No notifications yet.'))
           : ListView.builder(
-              itemCount: _notifications.length,
-              itemBuilder: (context, index) {
-                final notification = _notifications[index];
-                return ListTile(
-                  leading: Icon(Icons.notifications, color: Colors.blue),
-                  title: Text(notification['title']!),
-                  subtitle: Text(notification['body']!),
-                  trailing: Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
+        itemCount: _notifications.length,
+        itemBuilder: (context, index) {
+          final notification = _notifications[index];
+          return ListTile(
+            leading: Icon(Icons.notifications, color: Colors.blue),
+            title: Text(notification['title']!),
+            subtitle: Text(notification['body']!),
+            trailing: Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () {
 // Handle notification tap
-                  },
-                );
-              },
-            ),
+            },
+          );
+        },
+      ),
     );
   }
 }
@@ -440,11 +473,11 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _fetchUserData() async {
     try {
       final user = await _dbHelper.database.then((db) => db.query(
-            'users',
-            where: 'username = ?',
-            whereArgs: [widget.username],
-            limit: 1,
-          ));
+        'users',
+        where: 'username = ?',
+        whereArgs: [widget.username],
+        limit: 1,
+      ));
 
       if (user.isNotEmpty) {
         setState(() {
@@ -471,35 +504,36 @@ class _ProfilePageState extends State<ProfilePage> {
       body: _userData == null
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 20),
-                  const CircleAvatar(
-                    radius: 50,
-                    backgroundImage: AssetImage(
-                        'assets/user_avatar.png'), // Replace with actual avatar logic if needed
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _userData?['username'] ?? 'N/A',
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    _userData?['email'] ?? 'N/A',
-                    style: const TextStyle(
-                        fontSize: 18, fontStyle: FontStyle.italic),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _logout,
-                    child: const Text('Logout'),
-                  ),
-                ],
-              ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const SizedBox(height: 20),
+            const CircleAvatar(
+              radius: 50,
+              backgroundImage: AssetImage(
+                  'assets/user_avatar.png'), // Replace with actual avatar logic if needed
             ),
+            const SizedBox(height: 10),
+            Text(
+              _userData?['username'] ?? 'N/A',
+              style: const TextStyle(
+                  fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              _userData?['email'] ?? 'N/A',
+              style: const TextStyle(
+                  fontSize: 18, fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _logout,
+              child: const Text('Logout'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
+
