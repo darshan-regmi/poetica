@@ -38,23 +38,86 @@ class DatabaseHelper {
       await db.execute('''
         CREATE TABLE users (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          username TEXT NOT NULL,
-          email TEXT NOT NULL,
-          password TEXT NOT NULL
+          username TEXT NOT NULL UNIQUE,
+          email TEXT NOT NULL UNIQUE,
+          password TEXT NOT NULL,
+          profile_picture TEXT,
+          bio TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       ''');
       print('Users table created.');
+
+      // Create the 'genre' table
+      await db.execute('''
+        CREATE TABLE genre (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          description TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      ''');
+      print('Genre table created.');
 
       // Create the 'poems' table
       await db.execute('''
         CREATE TABLE poems (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
           title TEXT NOT NULL,
           content TEXT NOT NULL,
-          timestamp TEXT NOT NULL
+          genre_id INTEGER NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          is_published BOOLEAN DEFAULT 1,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+          FOREIGN KEY (genre_id) REFERENCES genre (id) ON DELETE SET NULL
         )
       ''');
       print('Poems table created.');
+
+      // Create the 'likes' table
+      await db.execute('''
+        CREATE TABLE likes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          poem_id INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (poem_id) REFERENCES poems (id) ON DELETE CASCADE,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+      ''');
+      print('Likes table created.');
+
+      // Create the 'comments' table
+      await db.execute('''
+        CREATE TABLE comments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          poem_id INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          comment_text TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (poem_id) REFERENCES poems (id) ON DELETE CASCADE,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+      ''');
+      print('Comments table created.');
+
+      // Create the 'notifications' table
+      await db.execute('''
+        CREATE TABLE notifications (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          reference_id INTEGER,
+          message TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          is_read BOOLEAN DEFAULT 0,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+      ''');
+      print('Notifications table created.');
     } catch (e) {
       print('Error in onCreate: $e');
     }
@@ -66,7 +129,11 @@ class DatabaseHelper {
       if (oldVersion < newVersion) {
         // Drop old tables and recreate them
         await db.execute('DROP TABLE IF EXISTS users');
+        await db.execute('DROP TABLE IF EXISTS genre');
         await db.execute('DROP TABLE IF EXISTS poems');
+        await db.execute('DROP TABLE IF EXISTS likes');
+        await db.execute('DROP TABLE IF EXISTS comments');
+        await db.execute('DROP TABLE IF EXISTS notifications');
         await _onCreate(db, newVersion);
       }
     } catch (e) {
@@ -84,7 +151,8 @@ class DatabaseHelper {
   Future<bool> checkTableExists(String tableName) async {
     final db = await database;
     final result = await db.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=?;", [tableName]);
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?;",
+        [tableName]);
     return result.isNotEmpty;
   }
 
@@ -119,12 +187,17 @@ class DatabaseHelper {
 
     return db.insert(
       'users',
-      {'username': username.trim(), 'email': email.trim(), 'password': hashedPassword},
+      {
+        'username': username.trim(),
+        'email': email.trim(),
+        'password': hashedPassword
+      },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
-  Future<Map<String, dynamic>> loginUser(String username, String password) async {
+  Future<Map<String, dynamic>> loginUser(String username,
+      String password) async {
     final db = await database;
 
     // Trim the input values to avoid any accidental leading/trailing whitespace
@@ -132,14 +205,16 @@ class DatabaseHelper {
     password = password.trim();
 
     // Log the input values to ensure they are correct
-    print('Attempting to log in with username: $username and password: $password');
+    print(
+        'Attempting to log in with username: $username and password: $password');
 
     try {
       // Hash the password to compare it with the stored hash in the database
       String hashedPassword = hashPassword(password);
 
 
-      print('Attempting to log in with username: $username and password: $hashedPassword');
+      print(
+          'Attempting to log in with username: $username and password: $hashedPassword');
       // Perform the query to check for a matching user
       final result = await db.query(
         'users',
@@ -152,19 +227,17 @@ class DatabaseHelper {
       print('Login query result: $result');
 
       if (result.isNotEmpty) {
-        var verify = verifyPassword(password, result.first['password'] as String);
+        bool verify = verifyPassword(
+            password, result.first['password'] as String);
         print(verify);
-        if(verify) {
+        if (!verify) {
           print('Login successful! User found: ${result.first}');
           return result.first; // Return the first matching result
-        }else{
-
+        } else {
           print('No user found with the provided credentials');
           throw Exception("No user found with provided credentials");
         }
       } else {
-
-
         print('No user found with the provided credentials');
         throw Exception("No user found with provided credentials");
       }
@@ -174,7 +247,8 @@ class DatabaseHelper {
     }
   }
 
-  Future<int> registerUser(String username, String email, String password) async {
+  Future<int> registerUser(String username, String email,
+      String password) async {
     try {
       final tableExists = await checkTableExists('users');
       if (!tableExists) {
@@ -182,11 +256,15 @@ class DatabaseHelper {
         final db = await database;
         await db.execute('''
           CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            email TEXT NOT NULL,
-            password TEXT NOT NULL
-          )
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT NOT NULL UNIQUE,
+          email TEXT NOT NULL UNIQUE,
+          password TEXT NOT NULL,
+          profile_picture TEXT,
+          bio TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
         ''');
       }
 
@@ -206,30 +284,81 @@ class DatabaseHelper {
   }
 
   // Poem-related functions
-  Future<int> insertPoem(String title, String content) async {
+  Future<int> insertPoem(String title, String content, int userId, int genreId) async {
+    if (userId == null || genreId == null) {
+      throw Exception('User ID or Genre ID cannot be null');
+    }
+
     final db = await database;
     return db.insert(
       'poems',
-      {'title': title, 'content': content, 'timestamp': DateTime.now().toIso8601String()},
+      {
+        'title': title,
+        'content': content,
+        'user_id': userId,  // Make sure this is a valid integer
+        'genre_id': genreId,  // Make sure this is a valid integer
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+        'is_published': 1,  // Default to published
+      },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
+// Retrieve all poems from the database
   Future<List<Map<String, dynamic>>> getPoems() async {
     final db = await database;
-    return db.query('poems', orderBy: 'timestamp DESC');
+    return db.query('poems', orderBy: 'created_at DESC');
   }
 
+// Retrieve poems along with the user and genre details (join)
+  Future<List<Map<String, dynamic>>> getPoemsWithDetails() async {
+    final db = await database;
+    return db.rawQuery('''
+    SELECT poems.*, users.username, genre.name AS genre_name
+    FROM poems
+    JOIN users ON poems.user_id = users.id
+    JOIN genre ON poems.genre_id = genre.id
+    ORDER BY poems.created_at DESC
+  ''');
+  }
+
+// Delete a poem by its ID
   Future<int> deletePoem(int id) async {
     final db = await database;
     return db.delete('poems', where: 'id = ?', whereArgs: [id]);
   }
 
-  // Utility to fetch all users (for debugging)
+// Utility to fetch all users (for debugging purposes)
   Future<List<Map<String, dynamic>>> getAllUsers() async {
     final db = await database;
     return db.query('users');
   }
 
-  getNotifications() {}
+// Notifications method (you may want to implement it later)
+  getNotifications() {
+    // Placeholder for notifications functionality
+    print('Notifications method is yet to be implemented.');
+  }
+}
+// Modify the getPoems() method to join the necessary tables
+Future<List<Map<String, dynamic>>> getPoemsWithDetails() async {
+  final db = await DatabaseHelper().database;
+
+  // Query to fetch poems with the poet's name and genre
+  final result = await db.rawQuery('''
+    SELECT 
+      poems.title, 
+      poems.content, 
+      poems.is_published, 
+      users.username AS poet_name, 
+      genre.name AS genre_name, 
+      users.profile_picture
+    FROM poems
+    JOIN users ON poems.user_id = users.id
+    JOIN genre ON poems.genre_id = genre.id
+    ORDER BY poems.created_at DESC
+  ''');
+
+  return result;
 }
