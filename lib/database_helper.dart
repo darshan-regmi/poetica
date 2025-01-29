@@ -41,7 +41,6 @@ class DatabaseHelper {
           username TEXT NOT NULL UNIQUE,
           email TEXT NOT NULL UNIQUE,
           password TEXT NOT NULL,
-          profile_picture TEXT,
           bio TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -305,22 +304,36 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> debugPoems() async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT * FROM poems');
+    print("All poems in DB: $result");
+  }
+
 // Retrieve all poems from the database
   Future<List<Map<String, dynamic>>> getPoems() async {
     final db = await database;
     return db.query('poems', orderBy: 'created_at DESC');
   }
 
-// Retrieve poems along with the user and genre details (join)
+// Modify the getPoems() method to join the necessary tables
   Future<List<Map<String, dynamic>>> getPoemsWithDetails() async {
-    final db = await database;
-    return db.rawQuery('''
-    SELECT poems.*, users.username, genre.name AS genre_name
+    final db = await database;  // No need to call DatabaseHelper() again
+
+    // Query to fetch published poems with the poet's name and genre
+    final result = await db.rawQuery('''
+    SELECT poems.id, poems.title, poems.content, poems.is_published, 
+           users.username AS poet_name, genre.name AS genre_name 
     FROM poems
     JOIN users ON poems.user_id = users.id
-    JOIN genre ON poems.genre_id = genre.id
+    LEFT JOIN genre ON poems.genre_id = genre.id  -- Fix table name
+    WHERE poems.is_published = 1  -- Show only published poems
     ORDER BY poems.created_at DESC
   ''');
+
+    print("Fetched poems from DB: $result"); // Debugging output
+
+    return result;
   }
 
 // Delete a poem by its ID
@@ -341,24 +354,4 @@ class DatabaseHelper {
     print('Notifications method is yet to be implemented.');
   }
 }
-// Modify the getPoems() method to join the necessary tables
-Future<List<Map<String, dynamic>>> getPoemsWithDetails() async {
-  final db = await DatabaseHelper().database;
 
-  // Query to fetch poems with the poet's name and genre
-  final result = await db.rawQuery('''
-    SELECT 
-      poems.title, 
-      poems.content, 
-      poems.is_published, 
-      users.username AS poet_name, 
-      genre.name AS genre_name, 
-      users.profile_picture
-    FROM poems
-    JOIN users ON poems.user_id = users.id
-    JOIN genre ON poems.genre_id = genre.id
-    ORDER BY poems.created_at DESC
-  ''');
-
-  return result;
-}

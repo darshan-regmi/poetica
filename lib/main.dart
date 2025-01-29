@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'database_helper.dart';
+import 'poem_details_page.dart';
 
 void main() {
   runApp(PoeticaApp());
@@ -155,19 +156,32 @@ class PoeticaHome extends StatefulWidget {
 
 class _PoeticaHomeState extends State<PoeticaHome> {
   int _currentIndex = 0;
-
   late List<Widget> _pages;
+  List<Map<String, dynamic>> poems = []; // Declare poems
 
   @override
   void initState() {
     super.initState();
+    _fetchPoems(); // Fetch poems when app starts
+
     final loggedInUserId = widget.user['id'];
     _pages = [
-      ExplorePage(),
-      CreatePoemPage(userId: loggedInUserId,),
+      ExplorePage(poems: poems), // Pass poems to ExplorePage
+      CreatePoemPage(userId: loggedInUserId),
       NotificationsPage(),
       ProfilePage(username: widget.user['username']),
     ];
+  }
+
+  Future<void> _fetchPoems() async {
+    final dbHelper = DatabaseHelper();
+    final fetchedPoems = await dbHelper.getPoemsWithDetails();
+
+    setState(() {
+      poems = fetchedPoems;
+    });
+
+    print("Poems fetched: $poems");
   }
 
   @override
@@ -188,19 +202,15 @@ class _PoeticaHomeState extends State<PoeticaHome> {
         actions: [
           IconButton(
             icon: Icon(Icons.search, color: Colors.black),
-            onPressed: () {
-// Search functionality
-            },
+            onPressed: () {},
           ),
           IconButton(
             icon: Icon(Icons.notifications, color: Colors.black),
-            onPressed: () {
-// Notifications functionality
-            },
+            onPressed: () {},
           ),
         ],
       ),
-      body: _pages[_currentIndex],
+      body: _pages[_currentIndex], // Display the current page
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
@@ -210,30 +220,10 @@ class _PoeticaHomeState extends State<PoeticaHome> {
         },
         type: BottomNavigationBarType.fixed,
         items: [
-          BottomNavigationBarItem(
-              icon: Icon(
-                Icons.explore,
-                color: Colors.black,
-              ),
-              label: 'Explore'),
-          BottomNavigationBarItem(
-              icon: Icon(
-                Icons.edit,
-                color: Colors.black,
-              ),
-              label: 'Create'),
-          BottomNavigationBarItem(
-              icon: Icon(
-                Icons.notifications,
-                color: Colors.black,
-              ),
-              label: 'Alerts'),
-          BottomNavigationBarItem(
-              icon: Icon(
-                Icons.person,
-                color: Colors.black,
-              ),
-              label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.explore, color: Colors.black), label: 'Explore'),
+          BottomNavigationBarItem(icon: Icon(Icons.edit, color: Colors.black), label: 'Create'),
+          BottomNavigationBarItem(icon: Icon(Icons.notifications, color: Colors.black), label: 'Alerts'),
+          BottomNavigationBarItem(icon: Icon(Icons.person, color: Colors.black), label: 'Profile'),
         ],
       ),
     );
@@ -241,6 +231,25 @@ class _PoeticaHomeState extends State<PoeticaHome> {
 }
 
 class ExplorePage extends StatefulWidget {
+  final List<Map<String, dynamic>> poems;
+
+  ExplorePage({required this.poems}); // Accept poems
+
+  @override
+  Future<Widget> build(BuildContext context) async {
+    return poems.isEmpty
+        ? Center(child: Text('No poems found.'))
+        : ListView.builder(
+      itemCount: poems.length,
+      itemBuilder: (context, index) {
+        final poem = poems[index];
+        return ListTile(
+          title: Text(poem['title']),
+          subtitle: Text('By ${poem['poet_name']} - ${poem['genre_name'] ?? "Unknown Genre"}'),
+        );
+      },
+    );
+  }
   @override
   _ExplorePageState createState() => _ExplorePageState();
 }
@@ -248,6 +257,8 @@ class ExplorePage extends StatefulWidget {
 class _ExplorePageState extends State<ExplorePage> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> _poems = [];
+  bool _isLoading = true;
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -256,43 +267,66 @@ class _ExplorePageState extends State<ExplorePage> {
   }
 
   Future<void> _fetchPoems() async {
-    // Modify the query to fetch the poet's name, genre, and publication status
-    final poems = await _dbHelper.getPoemsWithDetails();
-    setState(() {
-      _poems = poems;
-    });
+    try {
+      final poems = await _dbHelper.getPoemsWithDetails();
+      setState(() {
+        _poems = poems;
+        _isLoading = false;
+        _errorMessage = _poems.isEmpty ? 'No poems available.' : '';
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load poems. Please try again.';
+      });
+      print('Error fetching poems: $e'); // Debugging
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return _poems.isEmpty
-        ? Center(child: Text('No poems yet.'))
-        : ListView.builder(
-      itemCount: _poems.length,
-      itemBuilder: (context, index) {
-        final poem = _poems[index];
-        return PoemCard(
-          title: poem['title'],
-          content: poem['content'],
-          poetName: poem['poet_name'], // Assumes the query now includes this
-          genre: poem['genre_name'],  // Assumes the query now includes this
-          isPublished: poem['is_published'], // Assumes the query now includes this
-          profilePicture: poem['profile_picture'], // If available
-          onLike: () {
-            // Handle like button press
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: _fetchPoems,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _errorMessage.isNotEmpty
+            ? Center(child: Text(_errorMessage, style: const TextStyle(fontSize: 16)))
+            : ListView.builder(
+          padding: const EdgeInsets.all(10),
+          itemCount: _poems.length,
+          itemBuilder: (context, index) {
+            final poem = _poems[index];
+            return PoemCard(
+              title: poem['title'],
+              content: poem['content'],
+              poetName: poem['poet_name'] ?? 'Unknown Poet',
+              genre: poem['genre_name'] ?? 'Unknown Genre',
+              onLike: () => _handleLike(poem),
+              onComment: () => _handleComment(poem),
+              onShare: () => _handleShare(poem),
+              onBookmark: () => _handleBookmark(poem),
+            );
           },
-          onComment: () {
-            // Handle comment button press
-          },
-          onShare: () {
-            // Handle share button press
-          },
-          onBookmark: () {
-            // Handle bookmark button press
-          },
-        );
-      },
+        ),
+      ),
     );
+  }
+
+  void _handleLike(Map<String, dynamic> poem) {
+    print('Liked: ${poem['title']}');
+  }
+
+  void _handleComment(Map<String, dynamic> poem) {
+    print('Comment on: ${poem['title']}');
+  }
+
+  void _handleShare(Map<String, dynamic> poem) {
+    print('Shared: ${poem['title']}');
+  }
+
+  void _handleBookmark(Map<String, dynamic> poem) {
+    print('Bookmarked: ${poem['title']}');
   }
 }
 
@@ -301,8 +335,6 @@ class PoemCard extends StatelessWidget {
   final String content;
   final String poetName;
   final String genre;
-  final bool isPublished; // Added to show the publication status
-  final String? profilePicture; // Added to show profile picture if available
   final Function onLike;
   final Function onComment;
   final Function onShare;
@@ -313,8 +345,6 @@ class PoemCard extends StatelessWidget {
     required this.content,
     required this.poetName,
     required this.genre,
-    required this.isPublished,
-    this.profilePicture,
     required this.onLike,
     required this.onComment,
     required this.onShare,
@@ -334,13 +364,8 @@ class PoemCard extends StatelessWidget {
           children: [
             // Poem Header
             ListTile(
-              leading: profilePicture != null
-                  ? CircleAvatar(
-                backgroundImage: NetworkImage(profilePicture!),
-              )
-                  : Icon(Icons.person), // Default icon if no profile picture
               title: Text(poetName, style: TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('Genre: $genre\nMood: Reflective'), // Added genre
+              subtitle: Text('Genre: $genre'), // Added genre
               trailing: Icon(Icons.more_vert),
             ),
             // Poem Title
@@ -364,15 +389,6 @@ class PoemCard extends StatelessWidget {
               ),
             ),
             SizedBox(height: 10),
-            // Publish Status
-            Text(
-              isPublished ? 'Published' : 'Unpublished',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isPublished ? Colors.green : Colors.red,
-              ),
-            ),
             SizedBox(height: 10),
             // Interaction Buttons
             Row(
@@ -546,7 +562,13 @@ class _CreatePoemPageState extends State<CreatePoemPage> {
               const SizedBox(height: 20),
               Center(
                 child: ElevatedButton.icon(
-                  onPressed: _savePoem,
+                  onPressed: () {
+                    _savePoem();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => ExplorePage(poems: [],)),
+                    );
+                  },
                   icon: const Icon(Icons.save),
                   label: const Text('Save Poem'),
                   style: ElevatedButton.styleFrom(
@@ -618,39 +640,45 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _fetchUserData();
-    _fetchUserPoems();  // Make sure this is called
   }
 
-  // Fetch user data from the database
+  // ✅ Fetch user data and then fetch poems (ensures _userData is available first)
   Future<void> _fetchUserData() async {
     try {
-      final user = await _dbHelper.database.then((db) => db.query(
+      final db = await _dbHelper.database;
+      final user = await db.query(
         'users',
         where: 'username = ?',
         whereArgs: [widget.username],
         limit: 1,
-      ));
+      );
 
       if (user.isNotEmpty) {
         setState(() {
           _userData = user.first;
-          _bioController.text = _userData?['bio'] ?? '';  // Initialize bio controller with existing bio
+          _bioController.text = _userData?['bio'] ?? '';
         });
+
+        // ✅ Fetch user poems only after _userData is available
+        _fetchUserPoems();
       }
     } catch (e) {
       print('Error fetching user data: $e');
     }
   }
 
-  // Fetch poems for the user from the database
+  // ✅ Fetch poems safely after user data is loaded
   Future<void> _fetchUserPoems() async {
+    if (_userData == null) return; // Ensure _userData is available
+
     try {
-      final poems = await _dbHelper.database.then((db) => db.query(
+      final db = await _dbHelper.database;
+      final poems = await db.query(
         'poems',
         where: 'user_id = ?',
         whereArgs: [_userData?['id']],
         orderBy: 'created_at DESC',
-      ));
+      );
 
       setState(() {
         _userPoems = poems;
@@ -660,34 +688,39 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // Handle bio update
+  // ✅ Fix Bio Update Issue (Ensure Database is Writable)
   Future<void> _updateBio() async {
-    if (_userData != null && _bioController.text.isNotEmpty) {
-      try {
-        final db = await _dbHelper.database;
-        await db.update(
-          'users',
-          {'bio': _bioController.text},
-          where: 'id = ?',
-          whereArgs: [_userData?['id']],
-        );
+    if (_userData == null || _bioController.text.isEmpty) return;
 
+    try {
+      final db = await _dbHelper.database;
+      final rowsAffected = await db.update(
+        'users',
+        {'bio': _bioController.text},
+        where: 'id = ?',
+        whereArgs: [_userData?['id']],
+      );
+
+      if (rowsAffected > 0) {
         setState(() {
           _userData?['bio'] = _bioController.text;
-          _isEditing = false; // Stop editing after saving
+          _isEditing = false;
         });
-      } catch (e) {
-        print('Error updating bio: $e');
+        print('Bio updated successfully.');
+      } else {
+        print('Bio update failed: No rows affected.');
       }
+    } catch (e) {
+      print('Error updating bio: $e');
     }
   }
 
-  // Handle logout
+  // ✅ Handle logout
   void _logout() {
-    Navigator.of(context).pushReplacementNamed('/login'); // Navigate to login page
+    Navigator.of(context).pushReplacementNamed('/login');
   }
 
-  // Toggle the edit mode for the bio
+  // ✅ Toggle edit mode
   void _toggleEdit() {
     setState(() {
       _isEditing = !_isEditing;
@@ -697,16 +730,6 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_userData?['username'] ?? 'Profile'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-          ),
-        ],
-      ),
       body: _userData == null
           ? const Center(child: CircularProgressIndicator())
           : Column(
@@ -718,17 +741,14 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 Text(
                   _userData?['username'] ?? 'N/A',
-                  style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 5),
                 Text(
                   _userData?['email'] ?? 'N/A',
-                  style: const TextStyle(
-                      fontSize: 16, fontStyle: FontStyle.italic),
+                  style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
                 ),
                 const SizedBox(height: 10),
-                // Bio Section
                 if (_isEditing)
                   TextField(
                     controller: _bioController,
@@ -755,14 +775,12 @@ class _ProfilePageState extends State<ProfilePage> {
               ],
             ),
           ),
-          // User Poems Section
           Expanded(
             child: _userPoems.isEmpty
                 ? const Center(child: Text('No poems posted yet.'))
                 : GridView.builder(
               padding: const EdgeInsets.all(8.0),
-              gridDelegate:
-              const SliverGridDelegateWithFixedCrossAxisCount(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
@@ -772,7 +790,18 @@ class _ProfilePageState extends State<ProfilePage> {
                 final poem = _userPoems[index];
                 return GestureDetector(
                   onTap: () {
-                    // Navigate to the poem details or edit page
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PoemDetailsPage(
+                          title: poem['title'],
+                          content: poem['content'],
+                          poetName: poem['poet_name'] ?? 'Unknown',
+                          genre: poem['genre_name'] ?? 'No Genre',
+                          isPublished: poem['is_published'] == 1,
+                        ),
+                      ),
+                    );
                   },
                   child: Container(
                     decoration: BoxDecoration(
@@ -787,28 +816,18 @@ class _ProfilePageState extends State<ProfilePage> {
                           poem['title'],
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 4),
                         Expanded(
                           child: Text(
                             poem['content'],
-                            maxLines: 4,
+                            maxLines: 6,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 14),
                           ),
                         ),
                         const SizedBox(height: 5),
-                        Text(
-                          poem['created_at'],
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
                       ],
                     ),
                   ),
