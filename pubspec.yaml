@@ -25,6 +25,6 @@ flutter:
   uses-material-design: true
 
   # Uncomment this section if you are adding assets (like images or fonts) to your app
-  assets:
-     - assets/images/
-     - assets/fonts/
+  # assets:
+  #   - assets/images/
+  #   - assets/fonts/
