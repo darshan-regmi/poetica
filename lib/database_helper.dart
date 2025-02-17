@@ -63,15 +63,16 @@ class DatabaseHelper {
       await db.execute('''
         CREATE TABLE poems (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id INTEGER NOT NULL,
           title TEXT NOT NULL,
           content TEXT NOT NULL,
-          genre_id INTEGER NOT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          is_published BOOLEAN DEFAULT 1,
-          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-          FOREIGN KEY (genre_id) REFERENCES genre (id) ON DELETE SET NULL
+          genre TEXT NOT NULL,
+          author_id INTEGER NOT NULL,
+          is_public INTEGER NOT NULL,
+          is_draft INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          tags TEXT,
+          image_url TEXT,
+          FOREIGN KEY(author_id) REFERENCES users(id)
         )
       ''');
       print('Poems table created.');
@@ -117,6 +118,42 @@ class DatabaseHelper {
         )
       ''');
       print('Notifications table created.');
+
+      // First, let's create the necessary tables
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS poems(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          author_id INTEGER NOT NULL,
+          genre TEXT,
+          is_public INTEGER DEFAULT 1,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (author_id) REFERENCES users (id)
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS saved_poems(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          poem_id INTEGER NOT NULL,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users (id),
+          FOREIGN KEY (poem_id) REFERENCES poems (id)
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS poem_likes(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          poem_id INTEGER NOT NULL,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users (id),
+          FOREIGN KEY (poem_id) REFERENCES poems (id)
+        )
+      ''');
     } catch (e) {
       print('Error in onCreate: $e');
     }
@@ -195,8 +232,8 @@ class DatabaseHelper {
     );
   }
 
-  Future<Map<String, dynamic>> loginUser(String username,
-      String password) async {
+  Future<Map<String, dynamic>> loginUser(
+      String username, String password) async {
     final db = await database;
 
     // Trim the input values to avoid any accidental leading/trailing whitespace
@@ -210,7 +247,6 @@ class DatabaseHelper {
     try {
       // Hash the password to compare it with the stored hash in the database
       String hashedPassword = hashPassword(password);
-
 
       print(
           'Attempting to log in with username: $username and password: $hashedPassword');
@@ -226,8 +262,8 @@ class DatabaseHelper {
       print('Login query result: $result');
 
       if (result.isNotEmpty) {
-        bool verify = verifyPassword(
-            password, result.first['password'] as String);
+        bool verify =
+            verifyPassword(password, result.first['password'] as String);
         print(verify);
         if (!verify) {
           print('Login successful! User found: ${result.first}');
@@ -246,8 +282,8 @@ class DatabaseHelper {
     }
   }
 
-  Future<int> registerUser(String username, String email,
-      String password) async {
+  Future<int> registerUser(
+      String username, String email, String password) async {
     try {
       final tableExists = await checkTableExists('users');
       if (!tableExists) {
@@ -283,23 +319,11 @@ class DatabaseHelper {
   }
 
   // Poem-related functions
-  Future<int> insertPoem(String title, String content, int userId, int genreId) async {
-    if (userId == null || genreId == null) {
-      throw Exception('User ID or Genre ID cannot be null');
-    }
-
+  Future<void> insertPoem(Map<String, dynamic> poem) async {
     final db = await database;
-    return db.insert(
+    await db.insert(
       'poems',
-      {
-        'title': title,
-        'content': content,
-        'user_id': userId,  // Make sure this is a valid integer
-        'genre_id': genreId,  // Make sure this is a valid integer
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-        'is_published': 1,  // Default to published
-      },
+      poem,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -318,7 +342,7 @@ class DatabaseHelper {
 
 // Modify the getPoems() method to join the necessary tables
   Future<List<Map<String, dynamic>>> getPoemsWithDetails() async {
-    final db = await database;  // No need to call DatabaseHelper() again
+    final db = await database; // No need to call DatabaseHelper() again
 
     // Query to fetch published poems with the poet's name and genre
     final result = await db.rawQuery('''
@@ -353,5 +377,207 @@ class DatabaseHelper {
     // Placeholder for notifications functionality
     print('Notifications method is yet to be implemented.');
   }
-}
 
+  Future<Map<String, dynamic>?> getUserById(int id) async {
+    final db = await database;
+    final List<Map<String, dynamic>> results = await db.query(
+      'users',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+
+    return results.isNotEmpty ? results.first : null;
+  }
+
+  Future<List<Map<String, dynamic>>> getUserPoems(int userId) async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT 
+        p.*,
+        u.username as author_name,
+        (SELECT COUNT(*) FROM saved_poems WHERE poem_id = p.id) as is_saved,
+        (SELECT COUNT(*) FROM poem_likes WHERE poem_id = p.id) as likes_count
+      FROM poems p
+      INNER JOIN users u ON p.author_id = u.id
+      WHERE p.author_id = ?
+      ORDER BY p.created_at DESC
+    ''', [userId]);
+  }
+
+  Future<Map<String, dynamic>> getUserStats(int? userId) async {
+    if (userId == null) {
+      return {'followers': 0, 'following': 0};
+    }
+
+    final db = await database;
+    final followers = await db.rawQuery('''
+      SELECT COUNT(*) as count FROM followers 
+      WHERE followed_id = ?
+    ''', [userId]);
+
+    final following = await db.rawQuery('''
+      SELECT COUNT(*) as count FROM followers 
+      WHERE follower_id = ?
+    ''', [userId]);
+
+    return {
+      'followers': Sqflite.firstIntValue(followers) ?? 0,
+      'following': Sqflite.firstIntValue(following) ?? 0,
+    };
+  }
+
+  Future<void> updateUserProfile(int userId, Map<String, dynamic> data) async {
+    final db = await database;
+    await db.update(
+      'users',
+      data,
+      where: 'id = ?',
+      whereArgs: [userId],
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getSavedPoems(int userId) async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT 
+        poems.*,
+        users.username as author_name,
+        1 as is_saved,
+        (SELECT COUNT(*) FROM poem_likes WHERE poem_id = poems.id) as likes_count
+      FROM poems
+      INNER JOIN saved_poems ON poems.id = saved_poems.poem_id
+      INNER JOIN users ON poems.author_id = users.id
+      WHERE saved_poems.user_id = ?
+      ORDER BY saved_poems.created_at DESC
+    ''', [userId]);
+  }
+
+  Future<List<Map<String, dynamic>>> getTaggedPoems(int userId) async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT poems.* FROM poems
+      INNER JOIN poem_tags ON poems.id = poem_tags.poem_id
+      WHERE poem_tags.user_id = ?
+    ''', [userId]);
+  }
+
+  Future<void> toggleFollow(int followerId, int followedId) async {
+    final db = await database;
+    final exists = await db.query(
+      'followers',
+      where: 'follower_id = ? AND followed_id = ?',
+      whereArgs: [followerId, followedId],
+    );
+
+    if (exists.isEmpty) {
+      await db.insert('followers', {
+        'follower_id': followerId,
+        'followed_id': followedId,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } else {
+      await db.delete(
+        'followers',
+        where: 'follower_id = ? AND followed_id = ?',
+        whereArgs: [followerId, followedId],
+      );
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllPoems() async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT poems.*, users.username as author_name, users.profile_picture as author_image
+      FROM poems
+      INNER JOIN users ON poems.author_id = users.id
+      WHERE poems.is_draft = 0
+      ORDER BY poems.created_at DESC
+    ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getFollowingPoems(int userId) async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT poems.*, users.username as author_name, users.profile_picture as author_image
+      FROM poems
+      INNER JOIN users ON poems.author_id = users.id
+      INNER JOIN followers ON poems.author_id = followers.followed_id
+      WHERE followers.follower_id = ? AND poems.is_draft = 0
+      ORDER BY poems.created_at DESC
+    ''', [userId]);
+  }
+
+  Future<List<Map<String, dynamic>>> getRecentPoems() async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT poems.*, users.username as author_name, users.profile_picture as author_image
+      FROM poems
+      INNER JOIN users ON poems.author_id = users.id
+      WHERE poems.is_draft = 0
+      ORDER BY poems.created_at DESC
+      LIMIT 20
+    ''');
+  }
+
+  Future<List<Map<String, dynamic>>> searchPoemsAndUsers(String query) async {
+    final db = await database;
+
+    // Search users
+    final users = await db.rawQuery('''
+      SELECT 
+        users.*, 
+        'user' as type,
+        (SELECT COUNT(*) FROM poems WHERE poems.author_id = users.id) as poems_count
+      FROM users
+      WHERE username LIKE ? OR bio LIKE ?
+      LIMIT 10
+    ''', ['%$query%', '%$query%']);
+
+    // Search poems
+    final poems = await db.rawQuery('''
+      SELECT 
+        poems.*, 
+        'poem' as type,
+        users.username as author_name
+      FROM poems
+      INNER JOIN users ON poems.author_id = users.id
+      WHERE title LIKE ? OR content LIKE ?
+      LIMIT 10
+    ''', ['%$query%', '%$query%']);
+
+    // Combine and sort results
+    final results = [...users, ...poems];
+    results.sort((a, b) {
+      if (a['type'] == b['type']) {
+        return 0;
+      }
+      return a['type'] == 'user' ? -1 : 1;
+    });
+
+    return results;
+  }
+
+  Future<void> toggleSavePoem(int userId, int poemId) async {
+    final db = await database;
+    final saved = await db.query(
+      'saved_poems',
+      where: 'user_id = ? AND poem_id = ?',
+      whereArgs: [userId, poemId],
+    );
+
+    if (saved.isEmpty) {
+      await db.insert('saved_poems', {
+        'user_id': userId,
+        'poem_id': poemId,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } else {
+      await db.delete(
+        'saved_poems',
+        where: 'user_id = ? AND poem_id = ?',
+        whereArgs: [userId, poemId],
+      );
+    }
+  }
+}
