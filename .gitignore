@@ -3,6 +3,7 @@
 # dependencies
 node_modules/
 
+/.qodo
 # Expo
 .expo/
 dist/
