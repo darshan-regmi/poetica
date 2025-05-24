@@ -9,7 +9,7 @@ export const theme = {
     accent: '#EEEEEE',           // Text on dark
     background: '#222831',       // Background
     card: '#393E46',             // PoemCard background
-    text: '#EEEEEE',             // Main text
+    text: '#DFD0B8',             // Main text
     lightText: '#B0B0B0',        // Placeholder, subtext
     border: '#393E46',           // Subtle border
     overlay: 'rgba(0, 173, 181, 0.1)', // Hover overlay

@@ -10,14 +10,18 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import CustomHeader from '../components/CustomHeader';
 import HomeScreen from '../screens/HomeScreen';
 import ShareScreen from '../screens/ShareScreen';
+import SettingsScreen from '../screens/SettingsScreen';
+import ProfileScreen from '../screens/ProfileScreen';
 import { theme } from '../styles/theme';
-import { HeaderTitle } from '../styles/styledComponents';
 
 export type RootStackParamList = {
   Home: undefined;
   Share: undefined;
+  Settings: undefined;
+  Profile: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -28,20 +32,40 @@ const AppNavigator = () => {
       <Stack.Navigator
         initialRouteName="Home"
         screenOptions={{
-          headerStyle: {
-            backgroundColor: theme.colors.background,
-            elevation: 0,
-            shadowOpacity: 0,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.border,
-          },
-          headerTitleAlign: 'center',
-          headerTitle: () => <HeaderTitle>Poetica</HeaderTitle>,
+          // Use custom headers for each screen
           cardStyle: { backgroundColor: theme.colors.background },
         }}
       >
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="Share" component={ShareScreen} />
+        <Stack.Screen 
+          name="Home" 
+          component={HomeScreen} 
+          options={{
+            // Custom header with no back button for home screen
+            header: () => <CustomHeader/>
+          }}
+        />
+        <Stack.Screen 
+          name="Share" 
+          component={ShareScreen} 
+          options={{
+            // Custom header with back button and title
+            header: () => <CustomHeader title="Share Poem" showBackButton />
+          }}
+        />
+        <Stack.Screen 
+          name="Settings" 
+          component={SettingsScreen} 
+          options={{
+            header: () => <CustomHeader title="Settings" showBackButton />
+          }}
+        />
+        <Stack.Screen 
+          name="Profile" 
+          component={ProfileScreen} 
+          options={{
+            header: () => <CustomHeader title="Profile" showBackButton />
+          }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

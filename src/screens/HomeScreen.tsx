@@ -47,6 +47,7 @@ const HomeScreen = () => {
   return (
     <SafeAreaContainer>
       <ScreenContainer>
+        
         <CenteredContainer>
           <QuoteCard>
             <QuoteText>{quote.text}</QuoteText>
