@@ -15,9 +15,11 @@ import HomeScreen from '../screens/HomeScreen';
 import ShareScreen from '../screens/ShareScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import LoginScreen from '../screens/LoginScreen';
 import { theme } from '../styles/theme';
 
 export type RootStackParamList = {
+  Login: undefined;
   Home: undefined;
   Share: undefined;
   Settings: undefined;
@@ -30,12 +32,19 @@ const AppNavigator = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="Home"
+        initialRouteName="Login"
         screenOptions={{
           // Use custom headers for each screen
           cardStyle: { backgroundColor: theme.colors.background },
         }}
       >
+        <Stack.Screen 
+          name="Login" 
+          component={LoginScreen} 
+          options={{
+            headerShown: false // Hide default header for login screen
+          }}
+        />
         <Stack.Screen 
           name="Home" 
           component={HomeScreen} 
