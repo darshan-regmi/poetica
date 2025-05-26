@@ -79,7 +79,6 @@ const LoginScreen = () => {
               resizeMode="contain"
             />
             
-            <Title>Poetica</Title>
             <Subtitle>{isLogin ? 'Sign in to your account' : 'Create a new account'}</Subtitle>
             
             <Input
