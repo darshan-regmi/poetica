@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   StyleSheet,
   TouchableOpacity,
@@ -8,6 +8,8 @@ import {
   StatusBar,
   Platform,
   Animated,
+  Easing,
+  Modal,
   useWindowDimensions,
   SafeAreaView
 } from 'react-native';
@@ -23,6 +25,12 @@ interface CustomHeaderProps {
   transparent?: boolean;
 }
 
+interface QuickAction {
+  icon: string;
+  label: string;
+  onPress: () => void;
+}
+
 const CustomHeader: React.FC<CustomHeaderProps> = ({
   title,
   showBackButton = false,
@@ -34,9 +42,51 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   
+  // State for profile drawer
+  const [profileDrawerVisible, setProfileDrawerVisible] = useState(false);
+  
   // Animation values
-  const opacity = React.useRef(new Animated.Value(0)).current;
-  const translateY = React.useRef(new Animated.Value(-10)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(-10)).current;
+  const logoRotate = useRef(new Animated.Value(0)).current;
+  const notificationBounce = useRef(new Animated.Value(1)).current;
+  const profileScale = useRef(new Animated.Value(1)).current;
+  
+  // Define quick actions for profile drawer
+  const quickActions: QuickAction[] = [
+    {
+      icon: 'edit-3',
+      label: 'Write Poem',
+      onPress: () => {
+        setProfileDrawerVisible(false);
+        navigation.navigate('Share' as never);
+      }
+    },
+    {
+      icon: 'bookmark',
+      label: 'My Library',
+      onPress: () => {
+        setProfileDrawerVisible(false);
+        console.log('Navigate to library');
+      }
+    },
+    {
+      icon: 'user',
+      label: 'Profile',
+      onPress: () => {
+        setProfileDrawerVisible(false);
+        navigation.navigate('Profile' as never);
+      }
+    },
+    {
+      icon: 'settings',
+      label: 'Settings',
+      onPress: () => {
+        setProfileDrawerVisible(false);
+        navigation.navigate('Settings' as never);
+      }
+    }
+  ];
   
   useEffect(() => {
     StatusBar.setBarStyle(transparent ? 'light-content' : 'dark-content');
@@ -58,6 +108,52 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
         useNativeDriver: true
       })
     ]).start();
+    
+    // Animate logo on focus
+    if (isFocused && !showBackButton) {
+      Animated.sequence([
+        Animated.timing(logoRotate, {
+          toValue: 0.05,
+          duration: 150,
+          useNativeDriver: true,
+          easing: Easing.linear
+        }),
+        Animated.timing(logoRotate, {
+          toValue: -0.05,
+          duration: 300,
+          useNativeDriver: true,
+          easing: Easing.linear
+        }),
+        Animated.timing(logoRotate, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+          easing: Easing.linear
+        })
+      ]).start();
+    }
+    
+    // Animate notification badge
+    const bounceAnimation = Animated.sequence([
+      Animated.timing(notificationBounce, {
+        toValue: 1.3,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.bounce
+      }),
+      Animated.timing(notificationBounce, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true
+      })
+    ]);
+    
+    // Run bounce animation every 5 seconds
+    const interval = setInterval(() => {
+      bounceAnimation.start();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, [transparent, isFocused]);
   
   const handleBackPress = () => {
@@ -67,6 +163,30 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
       navigation.goBack();
     }
   };
+  
+  // Handle profile press with animation
+  const handleProfilePress = () => {
+    Animated.sequence([
+      Animated.timing(profileScale, {
+        toValue: 0.9,
+        duration: 100,
+        useNativeDriver: true
+      }),
+      Animated.timing(profileScale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true
+      })
+    ]).start();
+    
+    setProfileDrawerVisible(true);
+  };
+  
+  // Create rotation interpolation for logo
+  const logoRotation = logoRotate.interpolate({
+    inputRange: [-0.05, 0, 0.05],
+    outputRange: ['-5deg', '0deg', '5deg']
+  });
 
   return (
     <Animated.View
@@ -115,7 +235,6 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
         ) : (
           <Image
             source={require("../../assets/logo3.png")}
-            style={styles.logo}
             resizeMode="contain"
           />
         )}
@@ -165,42 +284,66 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
               height={20}
               color={theme.colors.primary}
             />
-            <View style={styles.notificationBadge}>
-              <Text style={styles.badgeText}>3</Text>
-            </View>
+            <Animated.View style={[styles.notificationBadge, { transform: [{ scale: notificationBounce }] }]}>
+            </Animated.View>
           </View>
-        </TouchableOpacity>
-
-        {/* Settings Icon */}
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={() => {
-            navigation.navigate("Settings" as never);
-          }}
-        >
-          <Ionicons
-            name="settings-outline"
-            marginTop={5}
-            size={20}
-            height={20}
-            color={theme.colors.primary}
-          />
         </TouchableOpacity>
 
         {/* Profile Avatar */}
         <TouchableOpacity
           style={styles.avatarButton}
-          onPress={() => {
-            navigation.navigate("Profile" as never);
-          }}
+          onPress={handleProfilePress}
+          onLongPress={handleProfilePress}
+          accessibilityLabel="Profile menu"
+          accessibilityHint="Tap to open profile menu with quick actions"
         >
-          <Image
+          <Animated.Image
             source={require("../../assets/image.png")}
-            style={styles.avatar}
+            style={[styles.avatar, { transform: [{ scale: profileScale }] }]}
           />
           <View style={styles.onlineIndicator} />
         </TouchableOpacity>
       </View>
+      
+      {/* Profile Quick Actions Drawer */}
+      <Modal
+        visible={profileDrawerVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setProfileDrawerVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setProfileDrawerVisible(false)}
+        >
+          <View style={[styles.profileDrawer, { top: insets.top + 70 }]}>
+            <View style={styles.drawerHeader}>
+              <Image
+                source={require("../../assets/image.png")}
+                style={styles.drawerAvatar}
+              />
+              <View style={styles.drawerUserInfo}>
+                <Text style={styles.drawerUserName}>Darshan Regmi</Text>
+                <Text style={styles.drawerUserStatus}>Poet & Writer</Text>
+              </View>
+            </View>
+            
+            <View style={styles.drawerDivider} />
+            
+            {quickActions.map((action, index) => (
+              <TouchableOpacity 
+                key={index} 
+                style={styles.drawerAction}
+                onPress={action.onPress}
+              >
+                <Feather name={action.icon as any} size={18} color={theme.colors.primary} />
+                <Text style={styles.drawerActionText}>{action.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </Animated.View>
   );
 };
@@ -311,6 +454,64 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
     borderWidth: 2,
     borderColor: theme.colors.background,
+  },
+  // Profile drawer styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  profileDrawer: {
+    position: 'absolute',
+    right: theme.spacing.md,
+    width: 220,
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.borderRadius.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+    padding: theme.spacing.md,
+  },
+  drawerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+  },
+  drawerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: theme.spacing.md,
+  },
+  drawerUserInfo: {
+    flex: 1,
+  },
+  drawerUserName: {
+    fontSize: theme.fontSizes.md,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  drawerUserStatus: {
+    fontSize: theme.fontSizes.xs,
+    color: theme.colors.lightText,
+    marginTop: 2,
+  },
+  drawerDivider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginVertical: theme.spacing.sm,
+  },
+  drawerAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+    marginVertical: 2,
+  },
+  drawerActionText: {
+    marginLeft: theme.spacing.md,
+    fontSize: theme.fontSizes.md,
+    color: theme.colors.text,
   },
 });
 

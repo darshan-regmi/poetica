@@ -75,6 +75,9 @@ const LoginScreen = () => {
             {/* App Logo */}
             <Image 
               source={require('../../assets/logo3.png')} 
+              alt="App Logo"
+              width={5000}
+              height={2500}
               style={styles.logo}
               resizeMode="contain"
             />

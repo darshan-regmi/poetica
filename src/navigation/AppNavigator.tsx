@@ -17,6 +17,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import LoginScreen from '../screens/LoginScreen';
 import { theme } from '../styles/theme';
+import NavigationBar from '../components/NavigationBar';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -50,7 +51,8 @@ const AppNavigator = () => {
           component={HomeScreen} 
           options={{
             // Custom header with no back button for home screen
-            header: () => <CustomHeader/>
+            header: () => <CustomHeader/> ,
+            footer: () => <NavigationBar /> // Add custom navigation bar
           }}
         />
         <Stack.Screen 
@@ -58,21 +60,24 @@ const AppNavigator = () => {
           component={ShareScreen} 
           options={{
             // Custom header with back button and title
-            header: () => <CustomHeader title="Share Poem" showBackButton />
+            header: () => <CustomHeader title="Share Poem" showBackButton />,
+            footer: () => <NavigationBar /> // Add custom navigation bar
           }}
         />
         <Stack.Screen 
           name="Settings" 
           component={SettingsScreen} 
           options={{
-            header: () => <CustomHeader title="Settings" showBackButton />
+            header: () => <CustomHeader title="Settings" showBackButton />,
+            footer: () => <NavigationBar /> // Add custom navigation bar
           }}
         />
         <Stack.Screen 
           name="Profile" 
           component={ProfileScreen} 
           options={{
-            header: () => <CustomHeader title="Profile" showBackButton />
+            header: () => <CustomHeader title="Profile" showBackButton /> ,
+            footer: () => <NavigationBar /> // Add custom navigation bar
           }}
         />
       </Stack.Navigator>
